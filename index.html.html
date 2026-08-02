@@ -1,0 +1,1611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekly Travel Reimbursement App</title>
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PDF.js library for converting uploaded PDF bills into high-res print images -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- html2pdf.js for Direct Mobile PDF Download fallback -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script>
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+    </script>
+    
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: #f3f4f6;
+            color: #111827;
+        }
+
+        /* Strict monochrome print table rules matching summary sheet */
+        .reimbursement-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: Arial, sans-serif;
+            font-size: 8px;
+            line-height: 1.1;
+        }
+
+        .reimbursement-table th, 
+        .reimbursement-table td {
+            border: 0.75px solid #000000;
+            padding: 1.5px 3px;
+            text-align: left;
+            vertical-align: middle;
+            background: transparent !important;
+            background-color: transparent !important;
+        }
+
+        .table-spacer {
+            margin-bottom: 0.5in !important;
+        }
+
+        .reimbursement-table th {
+            font-weight: bold;
+            color: #000000;
+            text-align: center;
+        }
+
+        .text-center { text-align: center !important; }
+        .text-right { text-align: right !important; }
+        .font-bold { font-weight: bold !important; }
+
+        /* Screen Preview Sheet Simulation */
+        .a4-page {
+            width: 210mm;
+            height: 297mm;
+            max-height: 297mm;
+            background: #ffffff;
+            margin: 0 auto;
+            padding: 8mm 10mm;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            border: 1px solid #cbd5e1;
+            box-sizing: border-box;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .attachment-page-preview {
+            width: 210mm;
+            height: 297mm;
+            max-height: 297mm;
+            background: #ffffff;
+            margin: 20px auto 0 auto;
+            padding: 5mm;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            border: 1px solid #cbd5e1;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Name and Signature Block Positioned Exactly 1 inch from bottom, 0.5 inch from right */
+        .signature-block {
+            position: absolute;
+            bottom: 1in;
+            right: 0.5in;
+            display: flex;
+            align-items: flex-end;
+            gap: 36px;
+            font-family: Arial, sans-serif;
+            z-index: 10;
+        }
+
+        .bill-checkbox-print {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 9px;
+            height: 9px;
+            border: 0.75px solid #000000;
+            font-size: 7px;
+            line-height: 1;
+            font-weight: bold;
+            user-select: none;
+            border-radius: 0px;
+            vertical-align: middle;
+        }
+
+        /* MOBILE PRINT FIXES */
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 0mm !important;
+            }
+
+            html, body {
+                height: auto !important;
+                width: 100% !important;
+                background: #ffffff !important;
+                color: #000000 !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            /* Force hide interactive non-printable UI elements */
+            header, .no-print, #editorView {
+                display: none !important;
+            }
+
+            /* Force show print container regardless of inline hidden classes on Mobile Safari/Chrome */
+            #previewView {
+                display: block !important;
+                visibility: visible !important;
+                position: static !important;
+                width: 100% !important;
+            }
+
+            .a4-page, .attachment-page-preview {
+                box-shadow: none !important;
+                border: none !important;
+                margin: 0 auto !important;
+                padding: 8mm 10mm !important;
+                width: 210mm !important;
+                max-width: 210mm !important;
+                height: 297mm !important;
+                max-height: 297mm !important;
+                overflow: hidden !important;
+                box-sizing: border-box !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                page-break-inside: avoid !important;
+            }
+
+            .attachment-page-preview {
+                padding: 0 !important;
+            }
+
+            .a4-page:last-child, .attachment-page-preview:last-child {
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+            }
+
+            input, select, textarea {
+                border: none !important;
+                background: transparent !important;
+                outline: none !important;
+                box-shadow: none !important;
+                appearance: none !important;
+                -webkit-appearance: none !important;
+                font-family: Arial, sans-serif !important;
+            }
+
+            .reimbursement-table th, 
+            .reimbursement-table td {
+                padding: 1px 2px !important;
+                font-size: 8px !important;
+                border: 0.75px solid #000000 !important;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Top Control Bar (Hidden when printing) -->
+    <header class="no-print bg-slate-900 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2 rounded-lg">
+                    <i class="fa-solid fa-file-invoice-dollar text-xl text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold leading-tight">Travel Reimbursement Builder</h1>
+                    <p class="text-xs text-slate-400">Inter Dominion Sales Agencies • Local Travel Summary</p>
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="flex flex-wrap items-center gap-2">
+                <button onclick="loadSampleData()" class="px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+                    Sample Data
+                </button>
+                <button onclick="saveDraftManual()" class="px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-floppy-disk text-blue-400"></i>
+                    Save Draft
+                </button>
+                <button onclick="exportCSV()" class="px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-file-excel text-emerald-400"></i>
+                    Export CSV
+                </button>
+                <button onclick="downloadPDFDirect()" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white rounded shadow transition flex items-center gap-1.5" title="Direct PDF Download for Mobile Browsers">
+                    <i class="fa-solid fa-file-pdf"></i>
+                    Download PDF
+                </button>
+                <button onclick="clearFormManual()" class="px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 rounded transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-trash-can"></i>
+                    Clear
+                </button>
+                <button onclick="triggerPrint()" class="px-4 py-1.5 text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white rounded shadow transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-print"></i>
+                    Print / Export PDF
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Sub-bar for Mode Toggling & Notification Messages -->
+    <div class="no-print bg-slate-800 border-b border-slate-700 text-slate-300 py-2 px-4 text-xs">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <span class="font-medium">View Mode:</span>
+                <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="viewMode" value="editor" checked onchange="switchView('editor')" class="text-blue-600 form-radio">
+                    <span class="ml-1.5">Interactive Editor</span>
+                </label>
+                <label class="inline-flex items-center cursor-pointer">
+                    <input type="radio" name="viewMode" value="preview" onchange="switchView('preview')" class="text-blue-600 form-radio">
+                    <span class="ml-1.5">A4 Document Preview</span>
+                </label>
+            </div>
+            <div id="statusNotice" class="text-xs text-emerald-400 font-medium hidden flex items-center gap-1">
+                <i class="fa-solid fa-circle-check"></i> <span id="statusNoticeText">Draft Saved</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Workspace Container -->
+    <main class="flex-grow py-6 px-2 sm:px-4">
+        
+        <!-- VIEW 1: INTERACTIVE EDITOR MODE -->
+        <div id="editorView" class="max-w-7xl mx-auto space-y-6">
+            
+            <!-- Employee Info Block -->
+            <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
+                <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 border-b pb-2 mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-user-gear text-blue-600"></i> Employee & Period Details
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Employee Name</label>
+                        <input type="text" id="inputName" oninput="updateEmployeeData()" placeholder="Enter Full Name" 
+                               class="w-full text-xs p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Week From Date</label>
+                        <input type="date" id="inputWeekFrom" onchange="updateEmployeeData()" 
+                               class="w-full text-xs p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 mb-1">Week To Date</label>
+                        <input type="date" id="inputWeekTo" onchange="updateEmployeeData()" 
+                               class="w-full text-xs p-2 border border-slate-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION A EDITOR -->
+            <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
+                <div class="flex items-center justify-between border-b pb-2 mb-4">
+                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-car-side text-blue-600"></i> Section A: Details of Travel Expenses (Taxi, Bus, Train etc)
+                    </h2>
+                    <button onclick="addTravelRow()" class="px-3 py-1 bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 rounded text-xs font-bold flex items-center gap-1 transition">
+                        <i class="fa-solid fa-plus"></i> Add Travel Row
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left border-collapse border border-slate-200">
+                        <thead class="bg-slate-100 text-slate-700 uppercase font-semibold">
+                            <tr>
+                                <th class="border border-slate-200 p-2 w-28">Date</th>
+                                <th class="border border-slate-200 p-2">From</th>
+                                <th class="border border-slate-200 p-2">To</th>
+                                <th class="border border-slate-200 p-2">Vendor</th>
+                                <th class="border border-slate-200 p-2 w-24">Bill No.</th>
+                                <th class="border border-slate-200 p-2 w-28 text-right">Amount (₹)</th>
+                                <th class="border border-slate-200 p-2 w-28">GST Type</th>
+                                <th class="border border-slate-200 p-2 w-28 text-center">Bill Attachment</th>
+                                <th class="border border-slate-200 p-2 w-12 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="editorTravelTableBody">
+                            <!-- Dynamic Rows -->
+                        </tbody>
+                        <tfoot>
+                            <tr class="bg-slate-50 font-bold border-t-2 border-slate-300">
+                                <td colspan="5" class="p-2 text-right border border-slate-200 uppercase">Total (A):</td>
+                                <td id="editorTotalA" class="p-2 text-right border border-slate-200 text-blue-700 text-sm">0.00</td>
+                                <td colspan="3" class="border border-slate-200"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SECTION B EDITOR -->
+            <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
+                <div class="flex items-center justify-between border-b pb-2 mb-4">
+                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                        <i class="fa-solid fa-receipt text-emerald-600"></i> Section B: Details of Other Expenses (If Any)
+                    </h2>
+                    <button onclick="addOtherRow()" class="px-3 py-1 bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100 rounded text-xs font-bold flex items-center gap-1 transition">
+                        <i class="fa-solid fa-plus"></i> Add Other Row
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-xs text-left border-collapse border border-slate-200">
+                        <thead class="bg-slate-100 text-slate-700 uppercase font-semibold">
+                            <tr>
+                                <th class="border border-slate-200 p-2 w-28">Date</th>
+                                <th class="border border-slate-200 p-2">Expense Details</th>
+                                <th class="border border-slate-200 p-2">Vendor</th>
+                                <th class="border border-slate-200 p-2 w-24">Bill No</th>
+                                <th class="border border-slate-200 p-2 w-28 text-right">Amount (₹)</th>
+                                <th class="border border-slate-200 p-2 w-28">GST Type</th>
+                                <th class="border border-slate-200 p-2 w-28 text-center">Bill Attachment</th>
+                                <th class="border border-slate-200 p-2 w-12 text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="editorOtherTableBody">
+                            <!-- Dynamic Rows -->
+                        </tbody>
+                        <tfoot>
+                            <tr class="bg-slate-50 font-bold border-t-2 border-slate-300">
+                                <td colspan="4" class="p-2 text-right border border-slate-200 uppercase">Total (B):</td>
+                                <td id="editorTotalB" class="p-2 text-right border border-slate-200 text-emerald-700 text-sm">0.00</td>
+                                <td colspan="3" class="border border-slate-200"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- REAL-TIME CALCULATED SUMMARIES -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Daily Summary Box -->
+                <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
+                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 border-b pb-2 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-days text-purple-600"></i> Daily Summary (Auto Generated)
+                    </h2>
+                    <p class="text-xs text-slate-500 mb-3">Grouped automatically by unique dates in Sections A & B.</p>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left border-collapse border border-slate-200">
+                            <thead class="bg-slate-100 text-slate-700">
+                                <tr>
+                                    <th class="border border-slate-200 p-2">Date</th>
+                                    <th class="border border-slate-200 p-2">Day</th>
+                                    <th class="border border-slate-200 p-2 text-right">Travel</th>
+                                    <th class="border border-slate-200 p-2 text-right">Other</th>
+                                    <th class="border border-slate-200 p-2 text-right">Total</th>
+                                    <th class="border border-slate-200 p-2">Parties Visited</th>
+                                </tr>
+                            </thead>
+                            <tbody id="editorDailyTableBody">
+                                <!-- Dynamic Daily Summary Rows -->
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-slate-100 font-bold">
+                                    <td colspan="2" class="border border-slate-200 p-2 text-right">Total:</td>
+                                    <td id="editorDailyTravelTotal" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="editorDailyOtherTotal" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="editorDailyGrandTotal" class="border border-slate-200 p-2 text-right text-purple-700">0.00</td>
+                                    <td class="border border-slate-200 p-2"></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- GST Summary Box -->
+                <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
+                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 border-b pb-2 mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-calculator text-amber-600"></i> GST Breakdown Summary
+                    </h2>
+                    <p class="text-xs text-slate-500 mb-3">Classifies claim amounts by GST Category.</p>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left border-collapse border border-slate-200">
+                            <thead class="bg-slate-100 text-slate-700 font-semibold">
+                                <tr>
+                                    <th class="border border-slate-200 p-2">Summary</th>
+                                    <th class="border border-slate-200 p-2 text-right">Reg-ITC</th>
+                                    <th class="border border-slate-200 p-2 text-right">Reg-No ITC</th>
+                                    <th class="border border-slate-200 p-2 text-right">Un Reg</th>
+                                    <th class="border border-slate-200 p-2 text-right">Amount</th>
+                                    <th class="border border-slate-200 p-2 text-right">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="border border-slate-200 p-2 font-semibold">Total (A)</td>
+                                    <td id="gstA_regITC" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstA_regNoITC" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstA_unReg" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstA_amt1" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstA_amt2" class="border border-slate-200 p-2 text-right">0.00</td>
+                                </tr>
+                                <tr>
+                                    <td class="border border-slate-200 p-2 font-semibold">Total (B)</td>
+                                    <td id="gstB_regITC" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstB_regNoITC" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstB_unReg" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstB_amt1" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstB_amt2" class="border border-slate-200 p-2 text-right">0.00</td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr class="bg-slate-100 font-bold">
+                                    <td class="border border-slate-200 p-2">Total Claim</td>
+                                    <td id="gstClaim_regITC" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstClaim_regNoITC" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstClaim_unReg" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstClaim_amt1" class="border border-slate-200 p-2 text-right">0.00</td>
+                                    <td id="gstClaim_amt2" class="border border-slate-200 p-2 text-right text-blue-700">0.00</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- VIEW 2: PIXEL-PERFECT A4 PRINTABLE DOCUMENT CONTAINER -->
+        <div id="previewView" class="hidden">
+            
+            <!-- PAGE 1: REIMBURSEMENT SUMMARY SHEET -->
+            <div class="a4-page bg-white text-black text-[8px] font-sans leading-tight">
+                <div>
+                    <!-- Print Document Header -->
+                    <div class="text-center mb-0.5">
+                        <h1 class="text-xs font-bold tracking-tight uppercase" style="font-family: Arial, sans-serif;">
+                            Inter Dominion Sales Agencies
+                        </h1>
+                        <h2 class="text-[9px] font-bold underline mt-0.5" style="font-family: Arial, sans-serif;">
+                            Weekly Travel Reimbursement Summary for Local Travel
+                        </h2>
+                    </div>
+
+                    <!-- Employee Details Table -->
+                    <table class="reimbursement-table table-spacer">
+                        <tbody>
+                            <tr>
+                                <td colspan="2" class="py-0.5">
+                                    <span class="font-bold">Name:</span> <span id="printName" class="ml-1 font-semibold"></span>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="width: 50%;" class="py-0.5">
+                                    <span class="font-bold">Week From:</span> <span id="printWeekFrom" class="ml-1"></span>
+                                </td>
+                                <td style="width: 50%;" class="py-0.5">
+                                    <span class="font-bold">To:</span> <span id="printWeekTo" class="ml-1"></span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Section A Header -->
+                    <div class="text-center font-bold text-[8px] py-0.5 mb-0.5">
+                        Details of Travel Expenses, Taxi, Bus, Train etc
+                    </div>
+
+                    <!-- Section A Table (20 Fixed Rows) -->
+                    <table class="reimbursement-table table-spacer">
+                        <thead>
+                            <tr>
+                                <th style="width: 11%;">Date</th>
+                                <th style="width: 17%;">From</th>
+                                <th style="width: 17%;">To</th>
+                                <th style="width: 18%;">Vendor</th>
+                                <th style="width: 12%;">Bill No.</th>
+                                <th style="width: 10%;">Amount</th>
+                                <th style="width: 11%;">GST Type</th>
+                                <th style="width: 4%;">Bill</th>
+                            </tr>
+                        </thead>
+                        <tbody id="printTravelTableBody">
+                            <!-- Rendered by JS -->
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="5" class="text-right font-bold py-0.5">Total (A)</td>
+                                <td id="printTotalA" class="text-right font-bold py-0.5">0.00</td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <!-- Section B Header -->
+                    <div class="text-center font-bold text-[8px] py-0.5 mb-0.5">
+                        Details of Other Expenses if any
+                    </div>
+
+                    <!-- Section B Table (7 Fixed Rows) -->
+                    <table class="reimbursement-table table-spacer">
+                        <thead>
+                            <tr>
+                                <th style="width: 11%;">Date</th>
+                                <th style="width: 34%;">Expense Details</th>
+                                <th style="width: 18%;">Vendor</th>
+                                <th style="width: 12%;">Bill No</th>
+                                <th style="width: 10%;">Amount</th>
+                                <th style="width: 11%;">GST Type</th>
+                                <th style="width: 4%;">Bill</th>
+                            </tr>
+                        </thead>
+                        <tbody id="printOtherTableBody">
+                            <!-- Rendered by JS -->
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="4" class="text-right font-bold py-0.5">Total (B)</td>
+                                <td id="printTotalB" class="text-right font-bold py-0.5">0.00</td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <!-- Daily Summary Table (8 Rows Fixed) -->
+                    <table class="reimbursement-table table-spacer">
+                        <thead>
+                            <tr>
+                                <th style="width: 11%;">Date</th>
+                                <th style="width: 13%;">Day</th>
+                                <th style="width: 11%;">Travel</th>
+                                <th style="width: 11%;">Other</th>
+                                <th style="width: 11%;">Total</th>
+                                <th style="width: 43%;">Parties Visited</th>
+                            </tr>
+                        </thead>
+                        <tbody id="printDailyTableBody">
+                            <!-- Rendered by JS -->
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="2" class="text-right font-bold py-0.5">Total:</td>
+                                <td id="printDailyTravelTotal" class="text-right font-bold py-0.5">0.00</td>
+                                <td id="printDailyOtherTotal" class="text-right font-bold py-0.5">0.00</td>
+                                <td id="printDailyGrandTotal" class="text-right font-bold py-0.5">0.00</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+
+                    <!-- GST Summary Table -->
+                    <div>
+                        <div style="width: 65%;">
+                            <table class="reimbursement-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 25%;">Summary</th>
+                                        <th style="width: 15%;">Reg-ITC</th>
+                                        <th style="width: 18%;">Reg-No ITC</th>
+                                        <th style="width: 14%;">Un Reg</th>
+                                        <th style="width: 14%;">Amount</th>
+                                        <th style="width: 14%;">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="font-bold py-0.5">Total (A)</td>
+                                        <td id="pGstA_regITC" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstA_regNoITC" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstA_unReg" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstA_amt1" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstA_amt2" class="text-right py-0.5">0.00</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="font-bold py-0.5">Total (B)</td>
+                                        <td id="pGstB_regITC" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstB_regNoITC" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstB_unReg" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstB_amt1" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstB_amt2" class="text-right py-0.5">0.00</td>
+                                    </tr>
+                                    <tr class="font-bold">
+                                        <td class="py-0.5">Total Claim</td>
+                                        <td id="pGstClaim_regITC" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstClaim_regNoITC" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstClaim_unReg" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstClaim_amt1" class="text-right py-0.5">0.00</td>
+                                        <td id="pGstClaim_amt2" class="text-right py-0.5">0.00</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Page 1 Name, Date & Signature Block -->
+                <div class="signature-block">
+                    <div style="width: 180px; text-align: center;">
+                        <div style="border-bottom: 1px solid #000000; width: 100%; height: 28px;"></div>
+                        <div style="font-size: 11px; font-family: Arial, sans-serif; margin-top: 5px; color: #000000;">Signature</div>
+                    </div>
+                    <div style="width: 180px; text-align: center;">
+                        <div style="border-bottom: 1px solid #000000; width: 100%; height: 28px;"></div>
+                        <div style="font-size: 11px; font-family: Arial, sans-serif; margin-top: 5px; color: #000000;">Date</div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Dynamic Container for Attachment Pages -->
+            <div id="printAttachmentsContainer"></div>
+        </div>
+    </main>
+
+    <!-- Lightbox Modal for Viewing Uploaded Bills -->
+    <div id="attachmentModal" class="no-print fixed inset-0 z-50 bg-black/75 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+            <div class="p-3 bg-slate-900 text-white flex justify-between items-center">
+                <h3 id="modalTitle" class="text-sm font-bold flex items-center gap-2">
+                    <i class="fa-solid fa-paperclip text-blue-400"></i> Attached Bill Preview
+                </h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-white text-lg px-2">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="modalBody" class="p-4 overflow-auto flex-grow bg-slate-100 flex items-center justify-center min-h-[300px]">
+                <!-- Injected Image or PDF -->
+            </div>
+            <div class="p-3 bg-slate-50 border-t flex justify-end">
+                <button onclick="closeModal()" class="px-4 py-1.5 bg-slate-700 text-white text-xs font-semibold rounded hover:bg-slate-800">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="confirmModal" class="no-print fixed inset-0 z-50 bg-black/75 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl space-y-4">
+            <h3 class="text-sm font-bold text-slate-900 border-b pb-2 flex items-center gap-2" id="confirmModalTitle">
+                <i class="fa-solid fa-triangle-exclamation text-amber-500"></i> Confirm Action
+            </h3>
+            <p class="text-xs text-slate-600 leading-relaxed" id="confirmModalMessage">Are you sure you want to proceed?</p>
+            <div class="flex justify-end space-x-2 pt-2">
+                <button onclick="closeConfirmModal(false)" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded transition">Cancel</button>
+                <button id="confirmModalBtn" onclick="closeConfirmModal(true)" class="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded transition">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global State
+        let appState = {
+            employee: {
+                name: '',
+                weekFrom: '',
+                weekTo: ''
+            },
+            travelExpenses: [],
+            otherExpenses: [],
+            partiesVisited: {}
+        };
+
+        const GST_OPTIONS = ['', 'Reg ITC', 'Reg No ITC', 'Un Reg'];
+        let confirmCallback = null;
+
+        // Custom Confirmation dialog replacing window.confirm
+        function showConfirm(message, title, onConfirm) {
+            document.getElementById('confirmModalMessage').innerText = message;
+            document.getElementById('confirmModalTitle').innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-500"></i> ${escapeHtml(title || 'Confirmation')}`;
+            confirmCallback = onConfirm;
+            document.getElementById('confirmModal').classList.remove('hidden');
+        }
+
+        function closeConfirmModal(accepted) {
+            document.getElementById('confirmModal').classList.add('hidden');
+            if (accepted && typeof confirmCallback === 'function') {
+                confirmCallback();
+            }
+            confirmCallback = null;
+        }
+
+        // On Load Initialization
+        window.onload = function() {
+            if (!loadDraft()) {
+                initDefaultRows();
+            }
+            renderAll();
+        };
+
+        function initDefaultRows() {
+            appState.travelExpenses = [
+                createExpenseItem(),
+                createExpenseItem(),
+                createExpenseItem()
+            ];
+            appState.otherExpenses = [
+                createExpenseItem(),
+                createExpenseItem()
+            ];
+        }
+
+        function createExpenseItem(overrides = {}) {
+            return {
+                id: 'exp_' + Math.random().toString(36).substr(2, 9),
+                date: overrides.date || '',
+                from: overrides.from || '',
+                to: overrides.to || '',
+                expenseDetails: overrides.expenseDetails || '',
+                vendor: overrides.vendor || '',
+                billNo: overrides.billNo || '',
+                amount: overrides.amount !== undefined ? overrides.amount : '',
+                gstType: overrides.gstType || '',
+                billAvailable: overrides.billAvailable || false,
+                attachments: overrides.attachments || []
+            };
+        }
+
+        // View Mode Switcher
+        function switchView(mode) {
+            const editor = document.getElementById('editorView');
+            const preview = document.getElementById('previewView');
+
+            if (mode === 'preview') {
+                editor.classList.add('hidden');
+                preview.classList.remove('hidden');
+                renderPrintView();
+            } else {
+                preview.classList.add('hidden');
+                editor.classList.remove('hidden');
+            }
+        }
+
+        // Mobile-Optimized Print Handler
+        function triggerPrint() {
+            renderPrintView();
+
+            const editor = document.getElementById('editorView');
+            const preview = document.getElementById('previewView');
+
+            editor.classList.add('hidden');
+            preview.classList.remove('hidden');
+
+            // Defer execution using requestAnimationFrame to give mobile WebKit DOM layout calculation time
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    window.print();
+                    
+                    setTimeout(() => {
+                        const currentMode = document.querySelector('input[name="viewMode"]:checked')?.value || 'editor';
+                        if (currentMode === 'editor') {
+                            preview.classList.add('hidden');
+                            editor.classList.remove('hidden');
+                        }
+                    }, 500);
+                }, 250);
+            });
+        }
+
+        // Direct Mobile PDF Generator Fallback
+        function downloadPDFDirect() {
+            renderPrintView();
+            const preview = document.getElementById('previewView');
+            preview.classList.remove('hidden');
+
+            showNotification("Generating PDF file...");
+
+            const opt = {
+                margin:       0,
+                filename:     `Travel_Reimbursement_${appState.employee.name || 'Report'}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(preview).save().then(() => {
+                const currentMode = document.querySelector('input[name="viewMode"]:checked')?.value || 'editor';
+                if (currentMode === 'editor') {
+                    preview.classList.add('hidden');
+                }
+                showNotification("PDF downloaded successfully!");
+            }).catch(err => {
+                console.error("PDF generation failed:", err);
+                showNotification("PDF generation failed. Use print button.");
+            });
+        }
+
+        function updateEmployeeData() {
+            appState.employee.name = document.getElementById('inputName').value;
+            appState.employee.weekFrom = document.getElementById('inputWeekFrom').value;
+            appState.employee.weekTo = document.getElementById('inputWeekTo').value;
+            autoSaveDraft();
+            renderPrintView();
+        }
+
+        function addTravelRow() {
+            appState.travelExpenses.push(createExpenseItem());
+            renderEditorTables();
+            calculateAndRenderSummaries();
+            autoSaveDraft();
+        }
+
+        function deleteTravelRow(id) {
+            appState.travelExpenses = appState.travelExpenses.filter(item => item.id !== id);
+            renderEditorTables();
+            calculateAndRenderSummaries();
+            autoSaveDraft();
+        }
+
+        function addOtherRow() {
+            appState.otherExpenses.push(createExpenseItem());
+            renderEditorTables();
+            calculateAndRenderSummaries();
+            autoSaveDraft();
+        }
+
+        function deleteOtherRow(id) {
+            appState.otherExpenses = appState.otherExpenses.filter(item => item.id !== id);
+            renderEditorTables();
+            calculateAndRenderSummaries();
+            autoSaveDraft();
+        }
+
+        function handleTravelInput(id, field, value) {
+            const item = appState.travelExpenses.find(i => i.id === id);
+            if (item) {
+                if (field === 'amount') {
+                    item[field] = value === '' ? '' : parseFloat(value) || 0;
+                } else {
+                    item[field] = value;
+                }
+            }
+            calculateAndRenderSummaries();
+            autoSaveDraft();
+        }
+
+        function handleOtherInput(id, field, value) {
+            const item = appState.otherExpenses.find(i => i.id === id);
+            if (item) {
+                if (field === 'amount') {
+                    item[field] = value === '' ? '' : parseFloat(value) || 0;
+                } else {
+                    item[field] = value;
+                }
+            }
+            calculateAndRenderSummaries();
+            autoSaveDraft();
+        }
+
+        // File Attachment Upload Logic
+        function triggerFileUpload(id, section) {
+            const fileInput = document.createElement('input');
+            fileInput.type = 'file';
+            fileInput.accept = 'image/jpeg,image/png,image/webp,application/pdf';
+            fileInput.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                let printDataUrl = '';
+
+                if (file.type === 'application/pdf' && window.pdfjsLib) {
+                    try {
+                        const arrayBuffer = await file.arrayBuffer();
+                        const pdf = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+                        const page = await pdf.getPage(1);
+                        const viewport = page.getViewport({ scale: 2.0 });
+                        const canvas = document.createElement('canvas');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        const ctx = canvas.getContext('2d');
+                        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                        printDataUrl = canvas.toDataURL('image/png');
+                    } catch(err) {
+                        console.error("PDF preview generation error:", err);
+                    }
+                }
+
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    const fileDataUrl = event.target.result;
+                    const list = section === 'travel' ? appState.travelExpenses : appState.otherExpenses;
+                    const item = list.find(i => i.id === id);
+                    if (item) {
+                        if (!item.attachments) item.attachments = [];
+                        item.attachments.push({
+                            name: file.name,
+                            type: file.type,
+                            data: fileDataUrl,
+                            printData: printDataUrl || fileDataUrl
+                        });
+                        item.billAvailable = true;
+                        renderEditorTables();
+                        calculateAndRenderSummaries();
+                        renderPrintView();
+                        autoSaveDraft();
+                        showNotification("Bill attached successfully!");
+                    }
+                };
+                reader.readAsDataURL(file);
+            };
+            fileInput.click();
+        }
+
+        function removeAttachment(id, section, index) {
+            const list = section === 'travel' ? appState.travelExpenses : appState.otherExpenses;
+            const item = list.find(i => i.id === id);
+            if (item && item.attachments) {
+                item.attachments.splice(index, 1);
+                if (item.attachments.length === 0) {
+                    item.billAvailable = false;
+                }
+                renderEditorTables();
+                calculateAndRenderSummaries();
+                renderPrintView();
+                autoSaveDraft();
+                showNotification("Attachment removed.");
+            }
+        }
+
+        function viewAttachmentModal(id, section, index) {
+            const list = section === 'travel' ? appState.travelExpenses : appState.otherExpenses;
+            const item = list.find(i => i.id === id);
+            if (!item || !item.attachments || !item.attachments[index]) return;
+
+            const att = item.attachments[index];
+            const modal = document.getElementById('attachmentModal');
+            const modalBody = document.getElementById('modalBody');
+            const modalTitle = document.getElementById('modalTitle');
+
+            modalTitle.innerHTML = `<i class="fa-solid fa-paperclip text-blue-400"></i> ${escapeHtml(att.name)} (${escapeHtml(item.vendor || 'Expense Bill')})`;
+
+            if (att.type && att.type.startsWith('image/')) {
+                modalBody.innerHTML = `<img src="${att.data}" class="max-w-full max-h-[70vh] object-contain rounded shadow" />`;
+            } else if (att.type === 'application/pdf') {
+                modalBody.innerHTML = `<iframe src="${att.data}" class="w-full h-[65vh] border-0 rounded"></iframe>`;
+            } else {
+                modalBody.innerHTML = `<p class="text-slate-600">File attached: ${escapeHtml(att.name)}</p>`;
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('attachmentModal').classList.add('hidden');
+        }
+
+        function handlePartyInput(date, value) {
+            appState.partiesVisited[date] = value;
+            autoSaveDraft();
+        }
+
+        function formatDateDisplay(dateStr) {
+            if (!dateStr) return '';
+            const parts = dateStr.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+            return dateStr;
+        }
+
+        function getDayName(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return '';
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            return days[d.getDay()];
+        }
+
+        function renderAll() {
+            document.getElementById('inputName').value = appState.employee.name || '';
+            document.getElementById('inputWeekFrom').value = appState.employee.weekFrom || '';
+            document.getElementById('inputWeekTo').value = appState.employee.weekTo || '';
+
+            renderEditorTables();
+            calculateAndRenderSummaries();
+            renderPrintView();
+        }
+
+        function renderEditorTables() {
+            // Section A Table
+            const tBodyA = document.getElementById('editorTravelTableBody');
+            tBodyA.innerHTML = '';
+            
+            appState.travelExpenses.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50";
+
+                const hasAttachments = item.attachments && item.attachments.length > 0;
+                let attachmentBadge = '';
+                if (hasAttachments) {
+                    attachmentBadge = item.attachments.map((att, idx) => `
+                        <div class="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0.5 text-[10px] my-0.5">
+                            <span onclick="viewAttachmentModal('${item.id}', 'travel', ${idx})" class="cursor-pointer hover:underline font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-file-image"></i> ${escapeHtml(att.name.length > 10 ? att.name.substring(0, 8) + '...' : att.name)}
+                            </span>
+                            <button onclick="removeAttachment('${item.id}', 'travel', ${idx})" class="text-rose-500 hover:text-rose-700 font-bold ml-1" title="Remove attachment">
+                                ×
+                            </button>
+                        </div>
+                    `).join(' ');
+                }
+
+                tr.innerHTML = `
+                    <td class="border border-slate-200 p-1">
+                        <input type="date" value="${item.date}" onchange="handleTravelInput('${item.id}', 'date', this.value)" class="w-full text-xs p-1 border border-slate-200 rounded">
+                    </td>
+                    <td class="border border-slate-200 p-1">
+                        <input type="text" value="${escapeHtml(item.from)}" oninput="handleTravelInput('${item.id}', 'from', this.value)" placeholder="From" class="w-full text-xs p-1 border border-slate-200 rounded">
+                    </td>
+                    <td class="border border-slate-200 p-1">
+                        <input type="text" value="${escapeHtml(item.to)}" oninput="handleTravelInput('${item.id}', 'to', this.value)" placeholder="To" class="w-full text-xs p-1 border border-slate-200 rounded">
+                    </td>
+                    <td class="border border-slate-200 p-1">
+                        <input type="text" value="${escapeHtml(item.vendor)}" oninput="handleTravelInput('${item.id}', 'vendor', this.value)" placeholder="Vendor" class="w-full text-xs p-1 border border-slate-200 rounded">
+                    </td>
+                    <td class="border border-slate-200 p-1">
+                        <input type="text" value="${escapeHtml(item.billNo)}" oninput="handleTravelInput('${item.id}', 'billNo', this.value)" placeholder="Bill #" class="w-full text-xs p-1 border border-slate-200 rounded">
+                    </td>
+                    <td class="border border-slate-200 p-1">
+                        <input type="number" step="0.01" value="${item.amount}" oninput="handleTravelInput('${item.id}', 'amount', this.value)" placeholder="0.00" class="w-full text-xs p-1 text-right border border-slate-200 rounded">
+                    </td>
+                    <td class="border border-slate-200 p-1">
+                        <select onchange="handleTravelInput('${item.id}', 'gstType', this.value)" class="w-full text-xs p-1 border border-slate-200 rounded">
+                            ${GST_OPTIONS.map(opt => `<option value="${opt}" ${item.gstType === opt ? 'selected' : ''}>${opt || '-- Select --'}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="border border-slate-200 p-1 text-center">
+                        <div class="flex flex-col items-center justify-center gap-1">
+                            <label class="inline-flex items-center text-[10px] gap-1 cursor-pointer">
+                                <input type="checkbox" ${item.billAvailable ? 'checked' : ''} onchange="handleTravelInput('${item.id}', 'billAvailable', this.checked)" class="h-3.5 w-3.5 text-blue-600 rounded">
+                                <span>Bill</span>
+                            </label>
+                            <div class="flex flex-wrap items-center justify-center gap-1">
+                                <button onclick="triggerFileUpload('${item.id}', 'travel')" title="Attach Bill / Receipt" class="no-print cursor-pointer text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded shadow-sm inline-flex items-center gap-1 font-medium">
+                                    📎 Attach
+                                </button>
+                                ${attachmentBadge}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="border border-slate-200 p-1 text-center">
+                        <button onclick="deleteTravelRow('${item.id}')" class="text-rose-500 hover:text-rose-700 p-1" title="Delete Row">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </td>
+                `;
+                tBodyA.appendChild(tr);
+            });
+
+            // Section B Table
+            const tBodyB = document.getElementById('editorOtherTableBody');
+            tBodyB.innerHTML = '';
+
+            appState.otherExpenses.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50";
+
+                const hasAttachments = item.attachments && item.attachments.length > 0;
+                let attachmentBadge = '';
+                if (hasAttachments) {
+                    attachmentBadge = item.attachments.map((att, idx) => `
+                        <div class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded px-1.5 py-0.5 text-[10px] my-0.5">
+                            <span onclick="viewAttachmentModal('${item.id}', 'other', ${idx})" class="cursor-pointer hover:underline font-semibold flex items-center gap-1">
+                                <i class="fa-solid fa-file-image"></i> ${escapeHtml(att.name.length > 10 ? att.name.substring(0, 8) + '...' : att.name)}
+                            </span>
+                            <button onclick="removeAttachment('${item.id}', 'other', ${idx})" class="text-rose-500 hover:text-rose-700 font-bold ml-1" title="Remove attachment">
+                                ×
+                            </button>
+                        </div>
+                    `).join(' ');
+                }
+
+                tr.innerHTML = `
+                    <td class="border border-slate-200 p-1">
+                        <input type="date" value="${item.date}" onchange="handleOtherInput('${item.id}', 'date', this.value)" class="w-full text-xs p-1 border border-slate-200 rounded">
+                    </td>
+                    <td class="border border-slate-200 p-1">
+                        <input type="text" value="${escapeHtml(item.expenseDetails)}" oninput="handleOtherInput('${item.id}', 'expenseDetails', this.value)" placeholder="Details" class="w-full text-xs p-1 border border-slate-200 rounded">
+                    </td>
+                    <td class="border border-slate-200 p-1">
+                        <input type="text" value="${escapeHtml(item.vendor)}" oninput="handleOtherInput('${item.id}', 'vendor', this.value)" placeholder="Vendor" class="w-full text-xs p-1 border border-slate-200 rounded">
+                    </td>
+                    <td class="border border-slate-200 p-1">
+                        <input type="text" value="${escapeHtml(item.billNo)}" oninput="handleOtherInput('${item.id}', 'billNo', this.value)" placeholder="Bill #" class="w-full text-xs p-1 border border-slate-200 rounded">
+                    </td>
+                    <td class="border border-slate-200 p-1">
+                        <input type="number" step="0.01" value="${item.amount}" oninput="handleOtherInput('${item.id}', 'amount', this.value)" placeholder="0.00" class="w-full text-xs p-1 text-right border border-slate-200 rounded">
+                    </td>
+                    <td class="border border-slate-200 p-1">
+                        <select onchange="handleOtherInput('${item.id}', 'gstType', this.value)" class="w-full text-xs p-1 border border-slate-200 rounded">
+                            ${GST_OPTIONS.map(opt => `<option value="${opt}" ${item.gstType === opt ? 'selected' : ''}>${opt || '-- Select --'}</option>`).join('')}
+                        </select>
+                    </td>
+                    <td class="border border-slate-200 p-1 text-center">
+                        <div class="flex flex-col items-center justify-center gap-1">
+                            <label class="inline-flex items-center text-[10px] gap-1 cursor-pointer">
+                                <input type="checkbox" ${item.billAvailable ? 'checked' : ''} onchange="handleOtherInput('${item.id}', 'billAvailable', this.checked)" class="h-3.5 w-3.5 text-emerald-600 rounded">
+                                <span>Bill</span>
+                            </label>
+                            <div class="flex flex-wrap items-center justify-center gap-1">
+                                <button onclick="triggerFileUpload('${item.id}', 'other')" title="Attach Bill / Receipt" class="no-print cursor-pointer text-[10px] px-1.5 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded shadow-sm inline-flex items-center gap-1 font-medium">
+                                    📎 Attach
+                                </button>
+                                ${attachmentBadge}
+                            </div>
+                        </div>
+                    </td>
+                    <td class="border border-slate-200 p-1 text-center">
+                        <button onclick="deleteOtherRow('${item.id}')" class="text-rose-500 hover:text-rose-700 p-1" title="Delete Row">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </td>
+                `;
+                tBodyB.appendChild(tr);
+            });
+        }
+
+        function calculateAndRenderSummaries() {
+            let totalA = 0;
+            appState.travelExpenses.forEach(i => { totalA += (parseFloat(i.amount) || 0); });
+
+            let totalB = 0;
+            appState.otherExpenses.forEach(i => { totalB += (parseFloat(i.amount) || 0); });
+
+            document.getElementById('editorTotalA').innerText = totalA.toFixed(2);
+            document.getElementById('editorTotalB').innerText = totalB.toFixed(2);
+
+            // Calculate Daily Aggregation
+            const dailyMap = {};
+            appState.travelExpenses.forEach(i => {
+                if (i.date) {
+                    if (!dailyMap[i.date]) dailyMap[i.date] = { travel: 0, other: 0 };
+                    dailyMap[i.date].travel += (parseFloat(i.amount) || 0);
+                }
+            });
+
+            appState.otherExpenses.forEach(i => {
+                if (i.date) {
+                    if (!dailyMap[i.date]) dailyMap[i.date] = { travel: 0, other: 0 };
+                    dailyMap[i.date].other += (parseFloat(i.amount) || 0);
+                }
+            });
+
+            const sortedDates = Object.keys(dailyMap).sort();
+            const dailyTableBody = document.getElementById('editorDailyTableBody');
+            dailyTableBody.innerHTML = '';
+
+            let dailySumTravel = 0;
+            let dailySumOther = 0;
+
+            if (sortedDates.length === 0) {
+                dailyTableBody.innerHTML = `<tr><td colspan="6" class="text-center py-3 text-slate-400">Enter expenses with dates above to auto-generate summary</td></tr>`;
+            } else {
+                sortedDates.forEach(dateStr => {
+                    const travelVal = dailyMap[dateStr].travel;
+                    const otherVal = dailyMap[dateStr].other;
+                    const dayTotal = travelVal + otherVal;
+
+                    dailySumTravel += travelVal;
+                    dailySumOther += otherVal;
+
+                    const partyText = appState.partiesVisited[dateStr] || '';
+
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="border border-slate-200 p-1.5 font-medium">${formatDateDisplay(dateStr)}</td>
+                        <td class="border border-slate-200 p-1.5 text-slate-600">${getDayName(dateStr)}</td>
+                        <td class="border border-slate-200 p-1.5 text-right">${travelVal.toFixed(2)}</td>
+                        <td class="border border-slate-200 p-1.5 text-right">${otherVal.toFixed(2)}</td>
+                        <td class="border border-slate-200 p-1.5 text-right font-bold">${dayTotal.toFixed(2)}</td>
+                        <td class="border border-slate-200 p-1">
+                            <input type="text" data-date="${dateStr}" value="${escapeHtml(partyText)}" oninput="handlePartyInput(this.getAttribute('data-date'), this.value)" placeholder="Parties visited..." class="w-full text-xs p-1 border border-slate-200 rounded">
+                        </td>
+                    `;
+                    dailyTableBody.appendChild(tr);
+                });
+            }
+
+            document.getElementById('editorDailyTravelTotal').innerText = dailySumTravel.toFixed(2);
+            document.getElementById('editorDailyOtherTotal').innerText = dailySumOther.toFixed(2);
+            document.getElementById('editorDailyGrandTotal').innerText = (dailySumTravel + dailySumOther).toFixed(2);
+
+            // Calculate GST Breakdown
+            const gstBreakdown = {
+                A: { 'Reg ITC': 0, 'Reg No ITC': 0, 'Un Reg': 0 },
+                B: { 'Reg ITC': 0, 'Reg No ITC': 0, 'Un Reg': 0 }
+            };
+
+            appState.travelExpenses.forEach(i => {
+                const amt = parseFloat(i.amount) || 0;
+                if (i.gstType && gstBreakdown.A[i.gstType] !== undefined) {
+                    gstBreakdown.A[i.gstType] += amt;
+                }
+            });
+
+            appState.otherExpenses.forEach(i => {
+                const amt = parseFloat(i.amount) || 0;
+                if (i.gstType && gstBreakdown.B[i.gstType] !== undefined) {
+                    gstBreakdown.B[i.gstType] += amt;
+                }
+            });
+
+            document.getElementById('gstA_regITC').innerText = gstBreakdown.A['Reg ITC'].toFixed(2);
+            document.getElementById('gstA_regNoITC').innerText = gstBreakdown.A['Reg No ITC'].toFixed(2);
+            document.getElementById('gstA_unReg').innerText = gstBreakdown.A['Un Reg'].toFixed(2);
+            document.getElementById('gstA_amt1').innerText = totalA.toFixed(2);
+            document.getElementById('gstA_amt2').innerText = totalA.toFixed(2);
+
+            document.getElementById('gstB_regITC').innerText = gstBreakdown.B['Reg ITC'].toFixed(2);
+            document.getElementById('gstB_regNoITC').innerText = gstBreakdown.B['Reg No ITC'].toFixed(2);
+            document.getElementById('gstB_unReg').innerText = gstBreakdown.B['Un Reg'].toFixed(2);
+            document.getElementById('gstB_amt1').innerText = totalB.toFixed(2);
+            document.getElementById('gstB_amt2').innerText = totalB.toFixed(2);
+
+            const claimRegITC = gstBreakdown.A['Reg ITC'] + gstBreakdown.B['Reg ITC'];
+            const claimRegNoITC = gstBreakdown.A['Reg No ITC'] + gstBreakdown.B['Reg No ITC'];
+            const claimUnReg = gstBreakdown.A['Un Reg'] + gstBreakdown.B['Un Reg'];
+            const grandTotalClaim = totalA + totalB;
+
+            document.getElementById('gstClaim_regITC').innerText = claimRegITC.toFixed(2);
+            document.getElementById('gstClaim_regNoITC').innerText = claimRegNoITC.toFixed(2);
+            document.getElementById('gstClaim_unReg').innerText = claimUnReg.toFixed(2);
+            document.getElementById('gstClaim_amt1').innerText = grandTotalClaim.toFixed(2);
+            document.getElementById('gstClaim_amt2').innerText = grandTotalClaim.toFixed(2);
+        }
+
+        function renderPrintView() {
+            const empName = appState.employee.name || '';
+            document.getElementById('printName').innerText = empName;
+            document.getElementById('printWeekFrom').innerText = formatDateDisplay(appState.employee.weekFrom);
+            document.getElementById('printWeekTo').innerText = formatDateDisplay(appState.employee.weekTo);
+
+            // Render Travel Table - Fixed 20 rows
+            const printTravelBody = document.getElementById('printTravelTableBody');
+            printTravelBody.innerHTML = '';
+
+            let sumA = 0;
+            const TOTAL_TRAVEL_ROWS = 20;
+
+            for (let idx = 0; idx < TOTAL_TRAVEL_ROWS; idx++) {
+                const item = appState.travelExpenses[idx] || {};
+                const amt = item.amount !== undefined && item.amount !== '' ? parseFloat(item.amount) : null;
+                if (amt !== null) sumA += amt;
+
+                const tr = document.createElement('tr');
+                tr.style.height = "12px";
+                tr.innerHTML = `
+                    <td class="text-center py-0.5">${formatDateDisplay(item.date) || ''}</td>
+                    <td class="py-0.5">${escapeHtml(item.from) || ''}</td>
+                    <td class="py-0.5">${escapeHtml(item.to) || ''}</td>
+                    <td class="py-0.5">${escapeHtml(item.vendor) || ''}</td>
+                    <td class="py-0.5">${escapeHtml(item.billNo) || ''}</td>
+                    <td class="text-right py-0.5">${amt !== null ? amt.toFixed(2) : ''}</td>
+                    <td class="text-center py-0.5">${item.gstType || ''}</td>
+                    <td class="text-center py-0.5">
+                        <span class="bill-checkbox-print">${item.billAvailable ? '✓' : ''}</span>
+                    </td>
+                `;
+                printTravelBody.appendChild(tr);
+            }
+            document.getElementById('printTotalA').innerText = sumA.toFixed(2);
+
+            // Render Other Expenses Table - Fixed 7 rows
+            const printOtherBody = document.getElementById('printOtherTableBody');
+            printOtherBody.innerHTML = '';
+
+            let sumB = 0;
+            const TOTAL_OTHER_ROWS = 7;
+
+            for (let idx = 0; idx < TOTAL_OTHER_ROWS; idx++) {
+                const item = appState.otherExpenses[idx] || {};
+                const amt = item.amount !== undefined && item.amount !== '' ? parseFloat(item.amount) : null;
+                if (amt !== null) sumB += amt;
+
+                const tr = document.createElement('tr');
+                tr.style.height = "12px";
+                tr.innerHTML = `
+                    <td class="text-center py-0.5">${formatDateDisplay(item.date) || ''}</td>
+                    <td class="py-0.5">${escapeHtml(item.expenseDetails) || ''}</td>
+                    <td class="py-0.5">${escapeHtml(item.vendor) || ''}</td>
+                    <td class="py-0.5">${escapeHtml(item.billNo) || ''}</td>
+                    <td class="text-right py-0.5">${amt !== null ? amt.toFixed(2) : ''}</td>
+                    <td class="text-center py-0.5">${item.gstType || ''}</td>
+                    <td class="text-center py-0.5">
+                        <span class="bill-checkbox-print">${item.billAvailable ? '✓' : ''}</span>
+                    </td>
+                `;
+                printOtherBody.appendChild(tr);
+            }
+            document.getElementById('printTotalB').innerText = sumB.toFixed(2);
+
+            // Render Daily Summary Table - Fixed 8 rows
+            const printDailyBody = document.getElementById('printDailyTableBody');
+            printDailyBody.innerHTML = '';
+
+            const dailyMap = {};
+            appState.travelExpenses.forEach(i => {
+                if (i.date) {
+                    if (!dailyMap[i.date]) dailyMap[i.date] = { travel: 0, other: 0 };
+                    dailyMap[i.date].travel += (parseFloat(i.amount) || 0);
+                }
+            });
+            appState.otherExpenses.forEach(i => {
+                if (i.date) {
+                    if (!dailyMap[i.date]) dailyMap[i.date] = { travel: 0, other: 0 };
+                    dailyMap[i.date].other += (parseFloat(i.amount) || 0);
+                }
+            });
+
+            const sortedDates = Object.keys(dailyMap).sort();
+            let pDailySumTravel = 0;
+            let pDailySumOther = 0;
+            const TOTAL_DAILY_ROWS = 8;
+
+            for (let idx = 0; idx < TOTAL_DAILY_ROWS; idx++) {
+                const dateStr = sortedDates[idx];
+                const tr = document.createElement('tr');
+                tr.style.height = "12px";
+
+                if (dateStr) {
+                    const travelVal = dailyMap[dateStr].travel;
+                    const otherVal = dailyMap[dateStr].other;
+                    const tot = travelVal + otherVal;
+
+                    pDailySumTravel += travelVal;
+                    pDailySumOther += otherVal;
+
+                    tr.innerHTML = `
+                        <td class="text-center py-0.5">${formatDateDisplay(dateStr)}</td>
+                        <td class="text-center py-0.5">${getDayName(dateStr)}</td>
+                        <td class="text-right py-0.5">${travelVal > 0 ? travelVal.toFixed(2) : '0.00'}</td>
+                        <td class="text-right py-0.5">${otherVal > 0 ? otherVal.toFixed(2) : '0.00'}</td>
+                        <td class="text-right py-0.5">${tot.toFixed(2)}</td>
+                        <td class="py-0.5">${escapeHtml(appState.partiesVisited[dateStr] || '')}</td>
+                    `;
+                } else {
+                    tr.innerHTML = `
+                        <td class="py-0.5"></td>
+                        <td class="py-0.5"></td>
+                        <td class="text-right py-0.5">${idx === 0 ? '0.00' : ''}</td>
+                        <td class="text-right py-0.5">${idx === 0 ? '0.00' : ''}</td>
+                        <td class="text-right py-0.5">${idx === 0 ? '0.00' : ''}</td>
+                        <td class="py-0.5"></td>
+                    `;
+                }
+                printDailyBody.appendChild(tr);
+            }
+
+            document.getElementById('printDailyTravelTotal').innerText = pDailySumTravel.toFixed(2);
+            document.getElementById('printDailyOtherTotal').innerText = pDailySumOther.toFixed(2);
+            document.getElementById('printDailyGrandTotal').innerText = (pDailySumTravel + pDailySumOther).toFixed(2);
+
+            // Render GST Summary Breakdown Table
+            const gstBreakdown = {
+                A: { 'Reg ITC': 0, 'Reg No ITC': 0, 'Un Reg': 0 },
+                B: { 'Reg ITC': 0, 'Reg No ITC': 0, 'Un Reg': 0 }
+            };
+
+            appState.travelExpenses.forEach(i => {
+                const amt = parseFloat(i.amount) || 0;
+                if (i.gstType && gstBreakdown.A[i.gstType] !== undefined) {
+                    gstBreakdown.A[i.gstType] += amt;
+                }
+            });
+
+            appState.otherExpenses.forEach(i => {
+                const amt = parseFloat(i.amount) || 0;
+                if (i.gstType && gstBreakdown.B[i.gstType] !== undefined) {
+                    gstBreakdown.B[i.gstType] += amt;
+                }
+            });
+
+            document.getElementById('pGstA_regITC').innerText = gstBreakdown.A['Reg ITC'].toFixed(2);
+            document.getElementById('pGstA_regNoITC').innerText = gstBreakdown.A['Reg No ITC'].toFixed(2);
+            document.getElementById('pGstA_unReg').innerText = gstBreakdown.A['Un Reg'].toFixed(2);
+            document.getElementById('pGstA_amt1').innerText = sumA.toFixed(2);
+            document.getElementById('pGstA_amt2').innerText = sumA.toFixed(2);
+
+            document.getElementById('pGstB_regITC').innerText = gstBreakdown.B['Reg ITC'].toFixed(2);
+            document.getElementById('pGstB_regNoITC').innerText = gstBreakdown.B['Reg No ITC'].toFixed(2);
+            document.getElementById('pGstB_unReg').innerText = gstBreakdown.B['Un Reg'].toFixed(2);
+            document.getElementById('pGstB_amt1').innerText = sumB.toFixed(2);
+            document.getElementById('pGstB_amt2').innerText = sumB.toFixed(2);
+
+            const cRegITC = gstBreakdown.A['Reg ITC'] + gstBreakdown.B['Reg ITC'];
+            const cRegNoITC = gstBreakdown.A['Reg No ITC'] + gstBreakdown.B['Reg No ITC'];
+            const cUnReg = gstBreakdown.A['Un Reg'] + gstBreakdown.B['Un Reg'];
+            const grandClaim = sumA + sumB;
+
+            document.getElementById('pGstClaim_regITC').innerText = cRegITC.toFixed(2);
+            document.getElementById('pGstClaim_regNoITC').innerText = cRegNoITC.toFixed(2);
+            document.getElementById('pGstClaim_unReg').innerText = cUnReg.toFixed(2);
+            document.getElementById('pGstClaim_amt1').innerText = grandClaim.toFixed(2);
+            document.getElementById('pGstClaim_amt2').innerText = grandClaim.toFixed(2);
+
+            renderPrintAttachments();
+        }
+
+        // Render Attached Receipts as Individual Pages
+        function renderPrintAttachments() {
+            const container = document.getElementById('printAttachmentsContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            let allAttachments = [];
+
+            appState.travelExpenses.forEach(item => {
+                if (item.attachments && item.attachments.length > 0) {
+                    item.attachments.forEach(att => {
+                        allAttachments.push(att);
+                    });
+                }
+            });
+
+            appState.otherExpenses.forEach(item => {
+                if (item.attachments && item.attachments.length > 0) {
+                    item.attachments.forEach(att => {
+                        allAttachments.push(att);
+                    });
+                }
+            });
+
+            allAttachments.forEach((att) => {
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'attachment-page-preview mt-6';
+                
+                let contentHtml = '';
+                const imgSrc = att.printData || att.data;
+
+                if (att.type === 'application/pdf' && !att.printData) {
+                    contentHtml = `<iframe src="${att.data}" class="w-full h-full border-0"></iframe>`;
+                } else {
+                    contentHtml = `<img src="${imgSrc}" class="max-w-full max-h-full object-contain mx-auto" alt="${escapeHtml(att.name || 'Attached Receipt')}" />`;
+                }
+
+                pageDiv.innerHTML = `
+                    <div class="w-full h-full flex items-center justify-center overflow-hidden p-2">
+                        ${contentHtml}
+                    </div>
+                `;
+                container.appendChild(pageDiv);
+            });
+        }
+
+        // Storage & Utilities
+        function autoSaveDraft() {
+            try {
+                localStorage.setItem('reimbursement_draft', JSON.stringify(appState));
+                showNotification("Draft saved automatically");
+            } catch (e) {
+                console.error("Failed to auto-save draft", e);
+            }
+        }
+
+        function saveDraftManual() {
+            try {
+                localStorage.setItem('reimbursement_draft', JSON.stringify(appState));
+                showNotification("Draft saved successfully!");
+            } catch (e) {
+                showNotification("Failed to save draft. Storage full.");
+            }
+        }
+
+        function loadDraft() {
+            try {
+                const saved = localStorage.getItem('reimbursement_draft');
+                if (saved) {
+                    appState = JSON.parse(saved);
+                    return true;
+                }
+            } catch (e) {
+                console.error("Failed to load draft", e);
+            }
+            return false;
+        }
+
+        function clearFormManual() {
+            showConfirm("Are you sure you want to clear all data? This action cannot be undone.", "Clear Form Data", function() {
+                localStorage.removeItem('reimbursement_draft');
+                appState = {
+                    employee: { name: '', weekFrom: '', weekTo: '' },
+                    travelExpenses: [],
+                    otherExpenses: [],
+                    partiesVisited: {}
+                };
+                initDefaultRows();
+                renderAll();
+                showNotification("Form cleared.");
+            });
+        }
+
+        function loadSampleData() {
+            const sampleReceiptDataUrl = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800"><rect width="600" height="800" fill="%23f8fafc"/><rect x="40" y="40" width="520" height="720" fill="%23ffffff" stroke="%23cbd5e1" stroke-width="2" rx="8"/><text x="300" y="100" font-family="Arial" font-size="24" font-weight="bold" text-anchor="middle" fill="%231e293b">TAXI RIDE RECEIPT</text><line x1="80" y1="130" x2="520" y2="130" stroke="%23e2e8f0" stroke-width="2"/><text x="80" y="180" font-family="Arial" font-size="16" fill="%23475569">Vendor: Uber India Technologies</text><text x="80" y="220" font-family="Arial" font-size="16" fill="%23475569">Trip ID: UB-89021</text><text x="80" y="260" font-family="Arial" font-size="16" fill="%23475569">Date: 20-07-2026</text><text x="80" y="300" font-family="Arial" font-size="16" fill="%23475569">From: Office (CP)</text><text x="80" y="340" font-family="Arial" font-size="16" fill="%23475569">To: Client - TCS Noida</text><line x1="80" y1="380" x2="520" y2="380" stroke="%23e2e8f0" stroke-width="2"/><text x="80" y="430" font-family="Arial" font-size="20" font-weight="bold" fill="%231e293b">Total Amount Paid: ₹450.00</text><text x="300" y="700" font-family="Arial" font-size="14" fill="%2394a3b8" text-anchor="middle">Attached Bill Copy - Reimbursement Verification</text></svg>`;
+
+            appState = {
+                employee: {
+                    name: "Rahul Sharma",
+                    weekFrom: "2026-07-20",
+                    weekTo: "2026-07-26"
+                },
+                travelExpenses: [
+                    createExpenseItem({ 
+                        date: "2026-07-20", 
+                        from: "Office (CP)", 
+                        to: "Client - TCS Noida", 
+                        vendor: "Uber", 
+                        billNo: "UB-89021", 
+                        amount: 450, 
+                        gstType: "Reg ITC", 
+                        billAvailable: true,
+                        attachments: [{
+                            name: "Uber_Receipt_89021.png",
+                            type: "image/png",
+                            data: sampleReceiptDataUrl,
+                            printData: sampleReceiptDataUrl
+                        }]
+                    }),
+                    createExpenseItem({ date: "2026-07-20", from: "TCS Noida", to: "Office (CP)", vendor: "Uber", billNo: "UB-89044", amount: 480, gstType: "Reg ITC", billAvailable: true }),
+                    createExpenseItem({ date: "2026-07-21", from: "Home", to: "Site - Gurgaon Sec 44", vendor: "Auto Metro", billNo: "N/A", amount: 150, gstType: "Un Reg", billAvailable: false }),
+                    createExpenseItem({ date: "2026-07-22", from: "Office", to: "Vendor Site Okhla", vendor: "Yellow Taxi", billNo: "TX-102", amount: 320, gstType: "Reg No ITC", billAvailable: true }),
+                    createExpenseItem({ date: "2026-07-24", from: "Office", to: "Airport T3", vendor: "BluSmart", billNo: "BS-7712", amount: 850, gstType: "Reg ITC", billAvailable: true })
+                ],
+                otherExpenses: [
+                    createExpenseItem({ date: "2026-07-20", expenseDetails: "Client Lunch Discussion", vendor: "Barbeque Nation", billNo: "BN-4501", amount: 1250, gstType: "Reg ITC", billAvailable: true }),
+                    createExpenseItem({ date: "2026-07-22", expenseDetails: "Site Printing & Binding", vendor: "Quick Print Hub", billNo: "QP-12", amount: 240, gstType: "Un Reg", billAvailable: true })
+                ],
+                partiesVisited: {
+                    "2026-07-20": "TCS Noida, Barbeque Nation",
+                    "2026-07-21": "DLF Cyber City - Sec 44",
+                    "2026-07-22": "Okhla Phase 3 Industrial Area",
+                    "2026-07-24": "IGI Airport T3 Meet & Greet"
+                }
+            };
+            renderAll();
+            autoSaveDraft();
+            showNotification("Sample data with attached receipt loaded!");
+        }
+
+        function exportCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "SECTION A: TRAVEL EXPENSES\n";
+            csvContent += "Date,From,To,Vendor,Bill No,Amount,GST Type,Bill Attached\n";
+            appState.travelExpenses.forEach(i => {
+                csvContent += `"${i.date}","${i.from}","${i.to}","${i.vendor}","${i.billNo}","${i.amount}","${i.gstType}","${i.billAvailable ? 'Yes' : 'No'}"\n`;
+            });
+            csvContent += "\nSECTION B: OTHER EXPENSES\n";
+            csvContent += "Date,Expense Details,Vendor,Bill No,Amount,GST Type,Bill Attached\n";
+            appState.otherExpenses.forEach(i => {
+                csvContent += `"${i.date}","${i.expenseDetails}","${i.vendor}","${i.billNo}","${i.amount}","${i.gstType}","${i.billAvailable ? 'Yes' : 'No'}"\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Travel_Reimbursement_${appState.employee.name || 'Export'}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function showNotification(msg) {
+            const el = document.getElementById('statusNotice');
+            const txt = document.getElementById('statusNoticeText');
+            if (el && txt) {
+                txt.innerText = msg;
+                el.classList.remove('hidden');
+                setTimeout(() => {
+                    el.classList.add('hidden');
+                }, 3000);
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
